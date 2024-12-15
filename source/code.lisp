@@ -146,7 +146,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (defgeneric attach-on-failure!* (promise &rest callbacks))
 
 (defmethod attach-on-success!* ((promise promise) &rest callbacks)
-  (bind (((:accessors lock cvar result fullfilled success-hooks canceled promise-success-p) promise))
+  (bind (((:accessors lock cvar result fullfilled success-hooks canceled successp) promise))
     (bt2:with-lock-held (lock)
       (if fullfilled
           (if successp
@@ -173,14 +173,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             (push callback failure-hooks)))
       promise)))
 
-(defmacro attach-on-success! (promise variable &body hooks)
+(defmacro attach-on-success! (promise &body hooks)
   `(attach-on-success!* ,promise
-    ,@(mapcar (lambda (body) `(lambda (,variable) ,@body))
+    ,@(mapcar (lambda (body) `(lambda () ,@body))
               hooks)))
 
-(defmacro attach-on-failure! (promise variable &body hooks)
+(defmacro attach-on-failure! (promise &body hooks)
   `(attach-on-failure!* ,promise
-    ,@(mapcar (lambda (body) `(lambda (,variable) ,@body))
+    ,@(mapcar (lambda (body) `(lambda () ,@body))
               hooks)))
 
 (defmacro promise (&body body)
