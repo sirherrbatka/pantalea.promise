@@ -23,7 +23,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (cl:in-package #:pantalea.promise)
 
 
-(defvar *results*)
+(defparameter *promises* (list))
 
 (defclass promise ()
   ((%lock
@@ -51,6 +51,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    (%failure-hooks
     :initform nil
     :accessor failure-hooks)
+   (%success-hooks
+    :initform nil
+    :accessor success-hooks)
    (%fullfilled
     :initarg :fullfilled
     :accessor fullfilled))
@@ -96,7 +99,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   (closer-mop:set-funcallable-instance-function obj #'fullfill!))
 
 (defmethod fullfill! ((promise promise))
-  (bind (((:accessors lock cvar callback result fullfilled promise-success-p success-hooks failure-hooks) promise))
+  (bind (((:accessors lock cvar callback result fullfilled successp success-hooks failure-hooks) promise)
+         (*promises* (cons promise *promises*)))
     (unwind-protect
          (bt2:with-lock-held (lock)
            (when fullfilled
@@ -111,7 +115,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
            result)
       (iterate
         (for hook in (bt2:with-lock-held (lock) (if successp success-hooks failure-hooks)))
-        (ignore-errors (funcall hook result)))
+        (ignore-errors (funcall hook)))
       (bt2:condition-notify cvar))))
 
 (defgeneric cancel! (promise &optional condition))

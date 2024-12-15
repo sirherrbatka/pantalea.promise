@@ -8,7 +8,7 @@
    #:attach-on-success!
    #:attach-on-failure!
    #:canceled
-   #:*results*
+   #:*promises*
    #:force-all!
    #:force!
    #:cancel!
