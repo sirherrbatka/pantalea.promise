@@ -95,8 +95,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (defgeneric fullfill! (promise))
 
 (defmethod initialize-instance :after ((obj promise) &key &allow-other-keys)
-  (check-type fn function)
-  (closer-mop:set-funcallable-instance-function obj #'fullfill!))
+  (closer-mop:set-funcallable-instance-function obj (curry #'fullfill! obj)))
 
 (defmethod fullfill! ((promise promise))
   (bind (((:accessors lock cvar callback result fullfilled successp success-hooks failure-hooks) promise)
@@ -186,7 +185,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               hooks)))
 
 (defmacro promise (&body body)
-  `(make-promise (lambda () ,@body)))
+  `(make (lambda () ,@body)))
 
 (defun find-fullfilled (promise &rest promises)
   (iterate
