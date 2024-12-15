@@ -151,8 +151,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       (if fullfilled
           (if successp
               (iterate
+                (with *promises* = (cons promise *promises*))
                 (for callback in callbacks)
-                (ignore-errors (funcall callback result)))
+                (ignore-errors (funcall callback)))
               nil)
           (iterate
             (for callback in callbacks)
@@ -166,8 +167,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           (if successp
               nil
               (iterate
+                (with *promises* = (cons promise *promises*))
                 (for callback in callbacks)
-                (ignore-errors (funcall callback result))))
+                (ignore-errors (funcall callback))))
           (iterate
             (for callback in callbacks)
             (push callback failure-hooks)))
