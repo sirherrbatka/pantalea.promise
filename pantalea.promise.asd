@@ -1,4 +1,4 @@
-(asdf:defsystem #:promise
+(asdf:defsystem #:pantalea.promise
   :name "promise"
   :depends-on (#:bordeaux-threads #:closer-mop #:iterate #:metabang-bind)
   :serial T

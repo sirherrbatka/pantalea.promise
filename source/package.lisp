@@ -1,4 +1,4 @@
-(cl:defpackage #:promise
+(cl:defpackage #:pantalea.promise
   (:use #:common-lisp #:iterate #:metabang-bind)
   (:local-nicknames)
   (:export
