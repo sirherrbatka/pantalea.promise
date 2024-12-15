@@ -73,11 +73,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                  (return-from force! (values result fullfilled))
                  (signal result))))
           (progn
-            (unless (fullfilled promise)
+            (unless fullfilled
               (bt2:condition-wait cvar lock :timeout timeout))
-            (if (typep result 'condition)
-                 (signal result)
-                 (return-from force! (values result fullfilled))))))))
+            (if fullfilled
+                (if successp
+                    (return-from force! (values result fullfilled))
+                    (signal result))
+                (values nil nil)))))))
 
 (defgeneric fullfilledp (promise)
   (:method ((promise t))
