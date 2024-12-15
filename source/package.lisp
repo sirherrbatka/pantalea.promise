@@ -1,6 +1,8 @@
 (cl:defpackage #:pantalea.promise
-  (:use #:common-lisp #:iterate #:metabang-bind)
+  (:use #:common-lisp #:iterate)
   (:local-nicknames)
+  (:import-from #:metabang.bind
+                #:bind)
   (:import-from #:alexandria
                 #:curry)
   (:export
