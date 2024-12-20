@@ -24,6 +24,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 (defparameter *promises* (list))
+(defvar *value*)
+(defvar *value-bound-p*)
 
 (defclass promise ()
   ((%lock
@@ -92,12 +94,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   (bt2:with-lock-held ((lock promise))
     (fullfilled promise)))
 
-(defgeneric fullfill! (promise))
+(defgeneric fullfill! (promise &optional value))
 
 (defmethod initialize-instance :after ((obj promise) &key &allow-other-keys)
   (closer-mop:set-funcallable-instance-function obj (curry #'fullfill! obj)))
 
-(defmethod fullfill! ((promise promise))
+(defmethod fullfill! ((promise promise) &optional (value nil result-bound-p))
   (bind (((:accessors lock cvar callback result fullfilled successp success-hooks failure-hooks) promise)
          (*promises* (cons promise *promises*)))
     (unwind-protect
@@ -106,7 +108,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
              (return-from fullfill! result))
            (handler-case
                (setf fullfilled t
-                     result (funcall callback)
+                     result (multiple-value-bind (r override)
+                                (if result-bound-p
+                                    (funcall callback value)
+                                    (funcall callback))
+                              (if (or override (not result-bound-p))
+                                  r
+                                  value))
                      successp t)
              (condition (s)
                (setf result s)
@@ -114,7 +122,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
            result)
       (iterate
         (for hook in (bt2:with-lock-held (lock) (if successp success-hooks failure-hooks)))
-        (ignore-errors (funcall hook)))
+        (ignore-errors (funcall hook result)))
       (bt2:condition-notify cvar))))
 
 (defgeneric cancel! (promise &optional condition))
@@ -123,7 +131,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   ())
 
 (defmethod cancel! ((promise promise) &optional (condition (make-condition 'canceled)))
-  (bind (((:accessors lock cvar result failure-hooks fullfilled canceled) promise))
+  (bind (((:accessors lock cvar result failure-hooks fullfilled canceled) promise)
+         (*promises* (cons promise *promises*)))
     (bt2:with-lock-held (lock)
       (unless fullfilled
         (setf result condition
@@ -131,7 +140,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               fullfilled t)
         (iterate
           (for hook in failure-hooks)
-          (ignore-errors (funcall hook result)))))))
+          (ignore-errors (funcall hook result))))
+      (bt2:condition-notify cvar))))
 
 (defun make (callback)
   (make-instance 'promise
@@ -152,7 +162,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               (iterate
                 (with *promises* = (cons promise *promises*))
                 (for callback in callbacks)
-                (ignore-errors (funcall callback)))
+                (ignore-errors (funcall callback result)))
               nil)
           (iterate
             (for callback in callbacks)
@@ -168,7 +178,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               (iterate
                 (with *promises* = (cons promise *promises*))
                 (for callback in callbacks)
-                (ignore-errors (funcall callback))))
+                (ignore-errors (funcall callback result))))
           (iterate
             (for callback in callbacks)
             (push callback failure-hooks)))
@@ -185,7 +195,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               hooks)))
 
 (defmacro promise (&body body)
-  `(make (lambda () ,@body)))
+  `(make (lambda (&optional (*value* nil *value-bound-p*)) ,@body)))
 
 (defun find-fullfilled (promise &rest promises)
   (iterate
