@@ -13,6 +13,8 @@
    #:attach-on-failure!
    #:canceled
    #:*promises*
+   #:*value*
+   #:*value-bound-p*
    #:force-all!
    #:force!
    #:cancel!
