@@ -134,14 +134,16 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   (bind (((:accessors lock cvar result failure-hooks fullfilled canceled) promise)
          (*promises* (cons promise *promises*)))
     (bt2:with-lock-held (lock)
-      (unless fullfilled
-        (setf result condition
-              canceled t
-              fullfilled t)
-        (iterate
-          (for hook in failure-hooks)
-          (ignore-errors (funcall hook result))))
-      (bt2:condition-notify cvar))))
+      (when fullfilled
+        (return-from cancel! promise))
+      (setf result condition
+            canceled t
+            fullfilled t)
+      (iterate
+        (for hook in failure-hooks)
+        (ignore-errors (funcall hook result))))
+    (bt2:condition-notify cvar))
+  promise)
 
 (defun make (callback)
   (make-instance 'promise
