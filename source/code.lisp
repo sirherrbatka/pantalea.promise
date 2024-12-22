@@ -116,6 +116,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 successp t)
         (condition (s)
           (setf result s)
+          (iterate
+            (for hook in failure-hooks)
+            (ignore-errors (funcall hook result)))
+          (bt2:condition-notify cvar)
           (signal s)))
       result)))
 
@@ -130,6 +134,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 successp t)
         (condition (s)
           (setf result s)
+          (iterate
+            (for hook in failure-hooks)
+            (ignore-errors (funcall hook result)))
+          (bt2:condition-notify cvar)
           (signal s)))
       result)))
 
