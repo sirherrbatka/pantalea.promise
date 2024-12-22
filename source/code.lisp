@@ -61,6 +61,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     :accessor fullfilled))
   (:metaclass closer-mop:funcallable-standard-class))
 
+(defclass locked-callback (promise)
+  ()
+  (:metaclass closer-mop:funcallable-standard-class))
+
 (defgeneric force! (promise &key timeout loop)
   (:method ((promise t) &key timeout loop)
     (declare (ignore timeout loop))
@@ -105,6 +109,32 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     (unwind-protect
          (bt2:with-lock-held (lock)
            (when fullfilled
+             (return-from fullfill! result))
+           (handler-case
+               (setf fullfilled t
+                     result (multiple-value-bind (r override)
+                                (if result-bound-p
+                                    (funcall callback value)
+                                    (funcall callback))
+                              (if (or override (not result-bound-p))
+                                  r
+                                  value))
+                     successp t)
+             (condition (s)
+               (setf result s)
+               (signal s)))
+           result)
+      (iterate
+        (for hook in (bt2:with-lock-held (lock) (if successp success-hooks failure-hooks)))
+        (ignore-errors (funcall hook result)))
+      (bt2:condition-notify cvar))))
+
+(defmethod fullfill! ((promise locked-callback) &optional (value nil result-bound-p))
+  (bind (((:accessors lock cvar callback canceled result fullfilled successp success-hooks failure-hooks) promise)
+         (*promises* (cons promise *promises*)))
+    (unwind-protect
+         (bt2:with-lock-held (lock)
+           (when canceled
              (return-from fullfill! result))
            (handler-case
                (setf fullfilled t

@@ -19,4 +19,5 @@
    #:force!
    #:cancel!
    #:promise
+   #:locked-callback
    #:make))
