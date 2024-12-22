@@ -65,6 +65,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   ()
   (:metaclass closer-mop:funcallable-standard-class))
 
+(defgeneric call/no-fullfill! (promise &optional value))
+
 (defgeneric force! (promise &key timeout loop)
   (:method ((promise t) &key timeout loop)
     (declare (ignore timeout loop))
@@ -103,6 +105,34 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (defmethod initialize-instance :after ((obj promise) &key &allow-other-keys)
   (closer-mop:set-funcallable-instance-function obj (curry #'fullfill! obj)))
 
+(defmethod call/no-fullfill! ((promise promise) &optional (value nil result-bound-p))
+  (bind (((:accessors lock cvar callback result fullfilled successp success-hooks failure-hooks) promise)
+         (*promises* (cons promise *promises*)))
+    (bt2:with-lock-held (lock)
+      (when fullfilled
+        (return-from call/no-fullfill! result))
+      (handler-case
+          (setf result (if result-bound-p value (funcall callback))
+                successp t)
+        (condition (s)
+          (setf result s)
+          (signal s)))
+      result)))
+
+(defmethod call/no-fullfill! ((promise locked-callback) &optional (value nil result-bound-p))
+  (bind (((:accessors lock canceled cvar callback result fullfilled successp success-hooks failure-hooks) promise)
+         (*promises* (cons promise *promises*)))
+    (bt2:with-lock-held (lock)
+      (when canceled
+        (return-from call/no-fullfill! result))
+      (handler-case
+          (setf result (if result-bound-p value (funcall callback))
+                successp t)
+        (condition (s)
+          (setf result s)
+          (signal s)))
+      result)))
+
 (defmethod fullfill! ((promise promise) &optional (value nil result-bound-p))
   (bind (((:accessors lock cvar callback result fullfilled successp success-hooks failure-hooks) promise)
          (*promises* (cons promise *promises*)))
@@ -112,13 +142,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
              (return-from fullfill! result))
            (handler-case
                (setf fullfilled t
-                     result (multiple-value-bind (r override)
-                                (if result-bound-p
-                                    (funcall callback value)
-                                    (funcall callback))
-                              (if (or override (not result-bound-p))
-                                  r
-                                  value))
+                     result (if result-bound-p value (funcall callback))
                      successp t)
              (condition (s)
                (setf result s)
@@ -138,13 +162,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
              (return-from fullfill! result))
            (handler-case
                (setf fullfilled t
-                     result (multiple-value-bind (r override)
-                                (if result-bound-p
-                                    (funcall callback value)
-                                    (funcall callback))
-                              (if (or override (not result-bound-p))
-                                  r
-                                  value))
+                     result (if result-bound-p value (funcall callback))
                      successp t)
              (condition (s)
                (setf result s)

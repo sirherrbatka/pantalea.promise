@@ -40,6 +40,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    #:*value-bound-p*
    #:force-all!
    #:force!
+   #:call/no-fullfill!
    #:cancel!
    #:promise
    #:locked-callback
