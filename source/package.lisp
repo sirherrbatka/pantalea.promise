@@ -33,8 +33,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    #:fullfilledp
    #:find-fullfilled
    #:canceled
-   #:*value*
-   #:*value-bound-p*
    #:force-all!
    #:force!
    #:cancel!

@@ -23,9 +23,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (cl:in-package #:pantalea.promise)
 
 
-(defvar *value*)
-(defvar *value-bound-p*)
-
 (defclass promise ()
   ((%lock
     :initarg :lock
@@ -132,7 +129,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                  :fullfilled nil))
 
 (defmacro promise (&body body)
-  `(make (lambda (&optional (*value* nil *value-bound-p*)) ,@body)))
+  `(make (lambda () ,@body)))
 
 (defun find-fullfilled (promise &rest promises)
   (iterate
