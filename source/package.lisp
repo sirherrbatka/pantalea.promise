@@ -34,7 +34,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    #:find-fullfilled
    #:canceled
    #:force-all!
-   #:force!
+   #:force
    #:cancel!
    #:promise
    #:make))

@@ -51,12 +51,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     :accessor fullfilled))
   (:metaclass closer-mop:funcallable-standard-class))
 
-(defgeneric force! (promise &key timeout loop)
+(defgeneric force (promise &key timeout loop)
   (:method ((promise t) &key timeout loop)
     (declare (ignore timeout loop))
     (values promise t)))
 
-(defmethod force! ((promise promise) &key timeout (loop t))
+(defmethod force ((promise promise) &key timeout (loop t))
   (bind (((:accessors promise-success-p lock cvar result fullfilled) promise))
     (bt2:with-lock-held (lock)
       (if loop
@@ -65,14 +65,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             (bt2:condition-wait cvar lock :timeout timeout)
             (finally
              (if promise-success-p
-                 (return-from force! (values result fullfilled))
+                 (return-from force (values result fullfilled))
                  (signal result))))
           (progn
             (unless fullfilled
               (bt2:condition-wait cvar lock :timeout timeout))
             (if fullfilled
                 (if promise-success-p
-                    (return-from force! (values result fullfilled))
+                    (return-from force (values result fullfilled))
                     (signal result))
                 (values nil nil)))))))
 
@@ -140,8 +140,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       (for (values v success) = (force! promise :loop nil :timeout 0.1))
       (when success (return-from find-fullfilled (values v i))))))
 
-(defun force-all! (promises &key timeout (loop t))
+(defun force-all (promises &key timeout (loop t))
   (map 'list
        (lambda (promise)
-         (force! promise :timeout timeout :loop loop))
+         (force promise :timeout timeout :loop loop))
        promises))
