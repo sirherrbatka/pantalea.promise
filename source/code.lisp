@@ -54,31 +54,27 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     :accessor fullfilled))
   (:metaclass closer-mop:funcallable-standard-class))
 
-(defclass locked-callback (promise)
-  ()
-  (:metaclass closer-mop:funcallable-standard-class))
-
 (defgeneric force! (promise &key timeout loop)
   (:method ((promise t) &key timeout loop)
     (declare (ignore timeout loop))
     (values promise t)))
 
 (defmethod force! ((promise promise) &key timeout (loop t))
-  (bind (((:accessors successp lock cvar result fullfilled) promise))
+  (bind (((:accessors promise-success-p lock cvar result fullfilled) promise))
     (bt2:with-lock-held (lock)
       (if loop
           (iterate
             (until fullfilled)
             (bt2:condition-wait cvar lock :timeout timeout)
             (finally
-             (if successp
+             (if promise-success-p
                  (return-from force! (values result fullfilled))
                  (signal result))))
           (progn
             (unless fullfilled
               (bt2:condition-wait cvar lock :timeout timeout))
             (if fullfilled
-                (if successp
+                (if promise-success-p
                     (return-from force! (values result fullfilled))
                     (signal result))
                 (values nil nil)))))))
@@ -101,22 +97,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     (unwind-protect
          (bt2:with-lock-held (lock)
            (when fullfilled
-             (return-from fullfill! result))
-           (handler-case
-               (setf fullfilled t
-                     result (if result-bound-p value (funcall callback))
-                     successp t)
-             (condition (s)
-               (setf result s)
-               (signal s)))
-           result)
-      (bt2:condition-notify cvar))))
-
-(defmethod fullfill! ((promise locked-callback) &optional (value nil result-bound-p))
-  (bind (((:accessors lock cvar callback canceled result fullfilled successp) promise))
-    (unwind-protect
-         (bt2:with-lock-held (lock)
-           (when canceled
              (return-from fullfill! result))
            (handler-case
                (setf fullfilled t
