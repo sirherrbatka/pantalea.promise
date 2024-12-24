@@ -23,7 +23,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (cl:in-package #:pantalea.promise)
 
 
-(defparameter *promises* (list))
 (defvar *value*)
 (defvar *value-bound-p*)
 
@@ -50,12 +49,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     :initarg :successp
     :reader promise-success-p
     :accessor successp)
-   (%failure-hooks
-    :initform nil
-    :accessor failure-hooks)
-   (%success-hooks
-    :initform nil
-    :accessor success-hooks)
    (%fullfilled
     :initarg :fullfilled
     :accessor fullfilled))
@@ -64,8 +57,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (defclass locked-callback (promise)
   ()
   (:metaclass closer-mop:funcallable-standard-class))
-
-(defgeneric call/no-fullfill! (promise &optional value))
 
 (defgeneric force! (promise &key timeout loop)
   (:method ((promise t) &key timeout loop)
@@ -105,45 +96,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (defmethod initialize-instance :after ((obj promise) &key &allow-other-keys)
   (closer-mop:set-funcallable-instance-function obj (curry #'fullfill! obj)))
 
-(defmethod call/no-fullfill! ((promise promise) &optional (value nil result-bound-p))
-  (bind (((:accessors lock cvar callback result fullfilled successp success-hooks failure-hooks) promise)
-         (*promises* (cons promise *promises*)))
-    (bt2:with-lock-held (lock)
-      (when fullfilled
-        (return-from call/no-fullfill! result))
-      (handler-case
-          (setf result (if result-bound-p value (funcall callback))
-                successp t)
-        (condition (s)
-          (setf result s)
-          (iterate
-            (for hook in failure-hooks)
-            (ignore-errors (funcall hook result)))
-          (bt2:condition-notify cvar)
-          (signal s)))
-      result)))
-
-(defmethod call/no-fullfill! ((promise locked-callback) &optional (value nil result-bound-p))
-  (bind (((:accessors lock canceled cvar callback result fullfilled successp success-hooks failure-hooks) promise)
-         (*promises* (cons promise *promises*)))
-    (bt2:with-lock-held (lock)
-      (when canceled
-        (return-from call/no-fullfill! result))
-      (handler-case
-          (setf result (if result-bound-p value (funcall callback))
-                successp t)
-        (condition (s)
-          (setf result s)
-          (iterate
-            (for hook in failure-hooks)
-            (ignore-errors (funcall hook result)))
-          (bt2:condition-notify cvar)
-          (signal s)))
-      result)))
-
 (defmethod fullfill! ((promise promise) &optional (value nil result-bound-p))
-  (bind (((:accessors lock cvar callback result fullfilled successp success-hooks failure-hooks) promise)
-         (*promises* (cons promise *promises*)))
+  (bind (((:accessors lock cvar callback result fullfilled successp ) promise))
     (unwind-protect
          (bt2:with-lock-held (lock)
            (when fullfilled
@@ -156,14 +110,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                (setf result s)
                (signal s)))
            result)
-      (iterate
-        (for hook in (bt2:with-lock-held (lock) (if successp success-hooks failure-hooks)))
-        (ignore-errors (funcall hook result)))
       (bt2:condition-notify cvar))))
 
 (defmethod fullfill! ((promise locked-callback) &optional (value nil result-bound-p))
-  (bind (((:accessors lock cvar callback canceled result fullfilled successp success-hooks failure-hooks) promise)
-         (*promises* (cons promise *promises*)))
+  (bind (((:accessors lock cvar callback canceled result fullfilled successp) promise))
     (unwind-protect
          (bt2:with-lock-held (lock)
            (when canceled
@@ -176,9 +126,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                (setf result s)
                (signal s)))
            result)
-      (iterate
-        (for hook in (bt2:with-lock-held (lock) (if successp success-hooks failure-hooks)))
-        (ignore-errors (funcall hook result)))
       (bt2:condition-notify cvar))))
 
 (defgeneric cancel! (promise &optional condition))
@@ -187,17 +134,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   ())
 
 (defmethod cancel! ((promise promise) &optional (condition (make-condition 'canceled)))
-  (bind (((:accessors lock cvar result failure-hooks fullfilled canceled) promise)
-         (*promises* (cons promise *promises*)))
+  (bind (((:accessors lock cvar result fullfilled canceled) promise))
     (bt2:with-lock-held (lock)
       (when fullfilled
         (return-from cancel! promise))
       (setf result condition
             canceled t
-            fullfilled t)
-      (iterate
-        (for hook in failure-hooks)
-        (ignore-errors (funcall hook result))))
+            fullfilled t))
     (bt2:condition-notify cvar))
   promise)
 
@@ -207,50 +150,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                  :result nil
                  :successp nil
                  :fullfilled nil))
-
-(defgeneric attach-on-success!* (promise &rest callbacks))
-
-(defgeneric attach-on-failure!* (promise &rest callbacks))
-
-(defmethod attach-on-success!* ((promise promise) &rest callbacks)
-  (bind (((:accessors lock cvar result fullfilled success-hooks canceled successp) promise))
-    (bt2:with-lock-held (lock)
-      (if fullfilled
-          (if successp
-              (iterate
-                (with *promises* = (cons promise *promises*))
-                (for callback in callbacks)
-                (ignore-errors (funcall callback result)))
-              nil)
-          (iterate
-            (for callback in callbacks)
-            (push callback success-hooks)))
-      promise)))
-
-(defmethod attach-on-failure!* ((promise promise) &rest callbacks)
-  (bind (((:accessors lock cvar result fullfilled failure-hooks canceled successp) promise))
-    (bt2:with-lock-held (lock)
-      (if fullfilled
-          (if successp
-              nil
-              (iterate
-                (with *promises* = (cons promise *promises*))
-                (for callback in callbacks)
-                (ignore-errors (funcall callback result))))
-          (iterate
-            (for callback in callbacks)
-            (push callback failure-hooks)))
-      promise)))
-
-(defmacro attach-on-success! (promise &body hooks)
-  `(attach-on-success!* ,promise
-    ,@(mapcar (lambda (body) `(lambda () ,@body))
-              hooks)))
-
-(defmacro attach-on-failure! (promise &body hooks)
-  `(attach-on-failure!* ,promise
-    ,@(mapcar (lambda (body) `(lambda () ,@body))
-              hooks)))
 
 (defmacro promise (&body body)
   `(make (lambda (&optional (*value* nil *value-bound-p*)) ,@body)))

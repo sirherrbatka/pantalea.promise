@@ -32,16 +32,11 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    #:fullfill!
    #:fullfilledp
    #:find-fullfilled
-   #:attach-on-success!
-   #:attach-on-failure!
    #:canceled
-   #:*promises*
    #:*value*
    #:*value-bound-p*
    #:force-all!
    #:force!
-   #:call/no-fullfill!
    #:cancel!
    #:promise
-   #:locked-callback
    #:make))
