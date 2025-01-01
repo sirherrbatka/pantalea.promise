@@ -84,7 +84,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   (bt2:with-lock-held ((lock promise))
     (fullfilled promise)))
 
-(defgeneric fullfill! (promise &optional value))
+(defgeneric fullfill! (promise &optional value)
+  (:method ((promise t) &optional value)
+    (or value promise)))
 
 (defmethod initialize-instance :after ((obj promise) &key &allow-other-keys)
   (closer-mop:set-funcallable-instance-function obj (curry #'fullfill! obj)))
