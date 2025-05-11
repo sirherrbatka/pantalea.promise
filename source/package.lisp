@@ -33,7 +33,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    #:fullfilledp
    #:find-fullfilled
    #:canceled
-   #:force-all!
+   #:force-all
    #:force
    #:cancel!
    #:promise
