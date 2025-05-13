@@ -147,3 +147,33 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
        (lambda (promise)
          (force promise :timeout timeout :loop loop))
        promises))
+
+(defclass combined-promise ()
+  ((%promises :reader promises
+              :initarg :promises)))
+
+(defun combine-every (promises)
+  (make-instance 'combined-promise
+                 :promises promises))
+
+(defmethod force ((promise combined-promise) &rest all &key timeout loop)
+  (declare (ignore timeout loop))
+  (mapcar (lambda (x) (apply #'force x all))
+          (promises promise)))
+
+(defmethod fullfill! ((promise combined-promise) &optional (value nil value-bound-p))
+  (loop :for promise :in (promises promise)
+        :do (if value-bound-p
+                (fullfill! promise value)
+                (fullfill! promise)))
+  promise)
+
+(defmethod cancel! ((promise combined-promise) &optional (condition nil condition-bound-p))
+  (loop :for promise :in (promises promise)
+        :do (if condition-bound-p
+                (cancel! promise condition)
+                (cancel! promise)))
+  promise)
+
+(defmethod fullfilledp ((promise combined-promise))
+  (every #'fullfilledp (promises promise)))
