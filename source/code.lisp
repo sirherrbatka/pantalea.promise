@@ -66,14 +66,14 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             (finally
              (if promise-success-p
                  (return-from force (values result fullfilled))
-                 (signal result))))
+                 (error result))))
           (progn
             (unless fullfilled
               (bt2:condition-wait cvar lock :timeout timeout))
             (if fullfilled
                 (if promise-success-p
                     (return-from force (values result fullfilled))
-                    (signal result))
+                    (error result))
                 (values nil nil)))))))
 
 (defgeneric fullfilledp (promise)
@@ -101,9 +101,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                (setf fullfilled t
                      result (if result-bound-p value (funcall callback))
                      successp t)
-             (condition (s)
+             (error (s)
                (setf result s)
-               (signal s)))
+               (error s)))
            result)
       (bt2:condition-notify cvar))))
 
