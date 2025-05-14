@@ -23,8 +23,18 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (cl:in-package #:pantalea.promise)
 
 
-(defclass promise ()
-  ((%lock
+(defclass fundamental-promise ()
+  ()
+  (:metaclass closer-mop:funcallable-standard-class))
+
+(defgeneric add-hook (promise hook))
+
+(defclass promise (fundamental-promise)
+  ((%hooks
+    :initarg :hooks
+    :initform (list)
+    :accessor hooks)
+   (%lock
     :initarg :lock
     :initform (bt2:make-lock :name "PROMISE lock")
     :accessor lock)
@@ -88,7 +98,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   (:method ((promise t) &optional value)
     (or value promise)))
 
-(defmethod initialize-instance :after ((obj promise) &key &allow-other-keys)
+(defmethod initialize-instance :after ((obj fundamental-promise) &key &allow-other-keys)
   (closer-mop:set-funcallable-instance-function obj (curry #'fullfill! obj)))
 
 (defmethod fullfill! ((promise promise) &optional (value nil result-bound-p))
@@ -148,9 +158,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
          (force promise :timeout timeout :loop loop))
        promises))
 
-(defclass combined-promise ()
+(defclass combined-promise (fundamental-promise)
   ((%promises :reader promises
-              :initarg :promises)))
+              :initarg :promises))
+  (:metaclass closer-mop:funcallable-standard-class))
 
 (defun combine-every (promises)
   (make-instance 'combined-promise
@@ -158,7 +169,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 (defmethod force ((promise combined-promise) &rest all &key timeout loop)
   (declare (ignore timeout loop))
-  (mapcar (lambda (x) (apply #'force x all))
+  (mapcar (lambda (x) (handler-case (apply #'force x all)
+                   (error (er) er)))
           (promises promise)))
 
 (defmethod fullfill! ((promise combined-promise) &optional (value nil value-bound-p))
@@ -177,3 +189,26 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 (defmethod fullfilledp ((promise combined-promise))
   (every #'fullfilledp (promises promise)))
+
+(defmethod add-hook ((promise promise) hook)
+  (let ((already-fullfilled nil))
+    (bt2:with-lock-held ((lock promise))
+      (if (fullfilled promise)
+          (setf already-fullfilled t)
+          (push hook (hooks promise))))
+    (when already-fullfilled
+      (funcall hook promise)))
+  promise)
+
+(defmethod add-hook ((promise combined-promise) hook)
+  (let* ((promises (promises promise))
+         (counter-lock (bt2:make-lock :name "counter lock"))
+         (counter (length promises))
+         (inner-hook (lambda (inner-promise)
+                       (declare (ignore inner-promise))
+                       (bt2:with-lock-held (counter-lock)
+                         (when (zerop (decf counter))
+                           (funcall hook promise))))))
+    (loop :for promise :in promises
+          :do (add-hook promise inner-hook)))
+  promise)
