@@ -146,11 +146,10 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (defun find-fullfilled (promise &rest promises)
   (iterate
     (with all-promises = (cons promise promises))
-    (iterate
-      (for i from 0)
-      (for promise in all-promises)
-      (for (values v success) = (force! promise :loop nil :timeout 0.1))
-      (when success (return-from find-fullfilled (values v i))))))
+    (for i from 0)
+    (for promise in all-promises)
+    (for (values v success) = (force promise :loop nil :timeout 0.1))
+    (when success (return-from find-fullfilled (values v i)))))
 
 (defun force-all (promises &key timeout (loop t))
   (map 'list
