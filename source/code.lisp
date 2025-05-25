@@ -27,14 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   ()
   (:metaclass closer-mop:funcallable-standard-class))
 
-(defgeneric add-hook (promise hook))
-
 (defclass promise (fundamental-promise)
-  ((%hooks
-    :initarg :hooks
-    :initform (list)
-    :accessor hooks)
-   (%lock
+  ((%lock
     :initarg :lock
     :initform (bt2:make-lock :name "PROMISE lock")
     :accessor lock)
@@ -188,26 +182,3 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 (defmethod fullfilledp ((promise combined-promise))
   (every #'fullfilledp (promises promise)))
-
-(defmethod add-hook ((promise promise) hook)
-  (let ((already-fullfilled nil))
-    (bt2:with-lock-held ((lock promise))
-      (if (fullfilled promise)
-          (setf already-fullfilled t)
-          (push hook (hooks promise))))
-    (when already-fullfilled
-      (funcall hook promise)))
-  promise)
-
-(defmethod add-hook ((promise combined-promise) hook)
-  (let* ((promises (promises promise))
-         (counter-lock (bt2:make-lock :name "counter lock"))
-         (counter (length promises))
-         (inner-hook (lambda (inner-promise)
-                       (declare (ignore inner-promise))
-                       (bt2:with-lock-held (counter-lock)
-                         (when (zerop (decf counter))
-                           (funcall hook promise))))))
-    (loop :for promise :in promises
-          :do (add-hook promise inner-hook)))
-  promise)
