@@ -111,14 +111,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
            result)
       (bt2:condition-notify cvar))))
 
-(defgeneric cancel! (promise &optional condition))
+(defgeneric cancel! (promise &optional condition timeout &rest all))
 
 (define-condition canceled (error)
   ())
 
-(defmethod cancel! ((promise promise) &optional (condition (make-condition 'canceled)))
+(defmethod cancel! ((promise promise) &optional (condition (make-condition 'canceled)) (timeout nil) &rest all)
+  (declare (ignore all))
   (bind (((:accessors lock cvar result fullfilled canceled) promise))
-    (bt2:with-lock-held (lock)
+    (bt2:with-lock-held (lock :timeout timeout)
       (when fullfilled
         (return-from cancel! promise))
       (setf result condition
@@ -173,11 +174,9 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 (fullfill! promise)))
   promise)
 
-(defmethod cancel! ((promise combined-promise) &optional (condition nil condition-bound-p))
+(defmethod cancel! ((promise combined-promise) &optional (condition nil condition-bound-p) (timeout nil) &rest all)
   (loop :for promise :in (promises promise)
-        :do (if condition-bound-p
-                (cancel! promise condition)
-                (cancel! promise)))
+        :do (apply #'cancel promise all))
   promise)
 
 (defmethod fullfilledp ((promise combined-promise))
