@@ -133,15 +133,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (defmethod cancel! ((promise promise) &rest all &key (condition (make-condition 'canceled)) (timeout nil))
   (declare (ignore all))
   (bind (((:accessors lock cvar result fullfilled canceled) promise))
-    (handler-case
-        (bt2:with-lock-held (lock :timeout timeout)
-          (when fullfilled
-            (errors:!!! already-fullfilled ("Can't cancel because promise is already fullfilled")))
-          (setf result condition
-                canceled t
-                fullfilled t))
-      (error (e)
-        (errors:!!! unable-to-cancel ("Unable to cancel.") :cause e)))
+    (bt2:with-lock-held (lock :timeout timeout)
+      (when fullfilled
+        (errors:!!! already-fullfilled ("Can't cancel because promise is already fullfilled")))
+      (setf result condition
+            canceled t
+            fullfilled t))
     (bt2:condition-notify cvar))
   promise)
 
