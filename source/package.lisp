@@ -23,19 +23,22 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 (cl:defpackage #:pantalea.promise
   (:use #:common-lisp #:iterate)
-  (:local-nicknames)
+  (:local-nicknames
+   (#:errors #:pantalea.errors))
   (:import-from #:metabang.bind
                 #:bind)
   (:import-from #:alexandria
+                #:rcurry
                 #:curry)
   (:export
    #:fullfill!
    #:fullfilledp
    #:find-fullfilled
    #:canceled
+   #:already-fullfilled
+   #:unable-to-cancel
    #:force-all
    #:force
    #:cancel!
-   #:combine-every
    #:promise
    #:make))

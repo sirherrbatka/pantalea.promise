@@ -80,13 +80,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                     (error result))
                 (values nil nil)))))))
 
-(defgeneric fullfilledp (promise)
-  (:method ((promise t))
+(defgeneric fullfilledp (promise &optional timeout)
+  (:method ((promise t) &optional timeout)
+    (declare (ignore timeout))
     t))
 
-(defmethod fullfilledp ((promise promise))
-  (bt2:with-lock-held ((lock promise))
-    (fullfilled promise)))
+(defmethod fullfilledp ((promise promise) &optional timeout)
+  (bt2:with-lock-held ((lock promise) :timeout timeout)
+    (handler-case (fullfilled promise)
+      (bt2:timeout (e)
+        (declare (ignore e))
+        nil))))
 
 (defgeneric fullfill! (promise &optional value)
   (:method ((promise t) &optional value)
@@ -98,33 +102,43 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (defmethod fullfill! ((promise promise) &optional (value nil result-bound-p))
   (bind (((:accessors lock cvar callback result fullfilled successp ) promise))
     (unwind-protect
-         (bt2:with-lock-held (lock)
-           (when fullfilled
-             (return-from fullfill! result))
-           (handler-case
-               (setf fullfilled t
-                     result (if result-bound-p value (funcall callback))
-                     successp t)
-             (error (s)
-               (setf result s)
-               (error s)))
-           result)
+         (progn
+           (bt2:with-lock-held (lock)
+             (when fullfilled
+               (return-from fullfill! result))
+             (handler-case
+                 (setf fullfilled t
+                       result (if result-bound-p value (funcall callback))
+                       successp t)
+               (error (s)
+                 (setf result s)
+                 (error s)))
+             result))
       (bt2:condition-notify cvar))))
 
-(defgeneric cancel! (promise &optional condition timeout &rest all))
+(defgeneric cancel! (promise &rest all &key condition timeout))
 
-(define-condition canceled (error)
+(errors:def canceled ()
   ())
 
-(defmethod cancel! ((promise promise) &optional (condition (make-condition 'canceled)) (timeout nil) &rest all)
+(errors:def unable-to-cancel ()
+  ())
+
+(errors:def already-fullfilled (unable-to-cancel)
+  ())
+
+(defmethod cancel! ((promise promise) &rest all &key (condition (make-condition 'canceled)) (timeout nil))
   (declare (ignore all))
   (bind (((:accessors lock cvar result fullfilled canceled) promise))
-    (bt2:with-lock-held (lock :timeout timeout)
-      (when fullfilled
-        (return-from cancel! promise))
-      (setf result condition
-            canceled t
-            fullfilled t))
+    (handler-case
+        (bt2:with-lock-held (lock :timeout timeout)
+          (when fullfilled
+            (errors:!!! already-fullfilled ("Can't cancel because promise is already fullfilled")))
+          (setf result condition
+                canceled t
+                fullfilled t))
+      (error (e)
+        (errors:!!! unable-to-cancel ("Unable to cancel.") :cause e)))
     (bt2:condition-notify cvar))
   promise)
 
@@ -151,33 +165,3 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
        (lambda (promise)
          (force promise :timeout timeout :loop loop))
        promises))
-
-(defclass combined-promise (fundamental-promise)
-  ((%promises :reader promises
-              :initarg :promises))
-  (:metaclass closer-mop:funcallable-standard-class))
-
-(defun combine-every (promises)
-  (make-instance 'combined-promise
-                 :promises promises))
-
-(defmethod force ((promise combined-promise) &rest all &key timeout loop)
-  (declare (ignore timeout loop))
-  (mapcar (lambda (x) (handler-case (apply #'force x all)
-                   (error (er) er)))
-          (promises promise)))
-
-(defmethod fullfill! ((promise combined-promise) &optional (value nil value-bound-p))
-  (loop :for promise :in (promises promise)
-        :do (if value-bound-p
-                (fullfill! promise value)
-                (fullfill! promise)))
-  promise)
-
-(defmethod cancel! ((promise combined-promise) &optional (condition nil condition-bound-p) (timeout nil) &rest all)
-  (loop :for promise :in (promises promise)
-        :do (apply #'cancel promise all))
-  promise)
-
-(defmethod fullfilledp ((promise combined-promise))
-  (every #'fullfilledp (promises promise)))

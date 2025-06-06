@@ -1,6 +1,7 @@
 (asdf:defsystem #:pantalea.promise
   :name "promise"
   :depends-on (#:bordeaux-threads
+               #:pantalea.errors
                #:closer-mop
                #:iterate
                #:metabang-bind
