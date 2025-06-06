@@ -35,6 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    #:fullfilledp
    #:find-fullfilled
    #:canceled
+   #:promise-error
    #:already-fullfilled
    #:unable-to-cancel
    #:force-all

@@ -118,10 +118,13 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 (defgeneric cancel! (promise &rest all &key condition timeout))
 
-(errors:def canceled ()
+(errors:def promise-error ()
   ())
 
-(errors:def unable-to-cancel ()
+(errors:def canceled (promise-error)
+  ())
+
+(errors:def unable-to-cancel (promise-error)
   ())
 
 (errors:def already-fullfilled (unable-to-cancel)
